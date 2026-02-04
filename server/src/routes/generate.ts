@@ -152,7 +152,7 @@ router.post('/upload-audio', authMiddleware, audioUpload.single('audio'), async 
     const ext = extFromName || extFromType || '.audio';
     const key = `references/${req.user!.id}/${Date.now()}-${generateUUID()}${ext}`;
     const storedKey = await storage.upload(key, req.file.buffer, req.file.mimetype);
-    const publicUrl = storage.getPublicUrl(storedKey);
+    const publicUrl = storedKey;
 
     res.json({ url: publicUrl, key: storedKey });
   } catch (error) {
@@ -221,8 +221,8 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
       return;
     }
 
-    if (customMode && !style && !lyrics) {
-      res.status(400).json({ error: 'Style or lyrics required for custom mode' });
+    if (customMode && !style && !lyrics && !referenceAudioUrl) {
+      res.status(400).json({ error: 'Style, lyrics, or reference audio required for custom mode' });
       return;
     }
 
