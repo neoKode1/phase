@@ -34,13 +34,15 @@ const audioUpload = multer({
       'audio/flac',
       'audio/x-flac',
       'audio/mp4',
+      'audio/x-m4a',
       'audio/aac',
       'audio/ogg',
       'audio/webm',
+      'video/mp4',
     ];
 
     // Also check file extension as fallback
-    const allowedExtensions = ['.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.webm', '.opus'];
+    const allowedExtensions = ['.mp3', '.wav', '.flac', '.m4a', '.mp4', '.aac', '.ogg', '.webm', '.opus'];
     const fileExt = file.originalname.toLowerCase().match(/\.[^.]+$/)?.[0];
 
     if (allowedTypes.includes(file.mimetype) || (fileExt && allowedExtensions.includes(fileExt))) {
@@ -141,10 +143,13 @@ router.post('/upload-audio', authMiddleware, audioUpload.single('audio'), async 
         case 'audio/ogg':
           return '.ogg';
         case 'audio/mp4':
+        case 'audio/x-m4a':
         case 'audio/aac':
           return '.m4a';
         case 'audio/webm':
           return '.webm';
+        case 'video/mp4':
+          return '.mp4';
         default:
           return '';
       }
@@ -370,7 +375,8 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                 const { buffer } = await downloadAudioToBuffer(audioUrl);
                 const ext = audioUrl.includes('.flac') ? '.flac' : '.mp3';
                 const storageKey = `${req.user!.id}/${songId}${ext}`;
-                const storedPath = await storage.upload(storageKey, buffer, `audio/${ext.slice(1)}`);
+                await storage.upload(storageKey, buffer, `audio/${ext.slice(1)}`);
+                const storedPath = storage.getPublicUrl(storageKey);
 
                 await pool.query(
                   `INSERT INTO songs (id, user_id, title, lyrics, style, caption, audio_url,
@@ -593,7 +599,6 @@ router.post('/format', authMiddleware, async (req: AuthenticatedRequest, res: Re
         cwd: ACESTEP_DIR,
         env: {
           ...process.env,
-          CUDA_VISIBLE_DEVICES: '0',
           ACESTEP_PATH: ACESTEP_DIR,
         },
       });

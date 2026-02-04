@@ -11,11 +11,22 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
   fileFilter: (_req, file, cb) => {
-    const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/flac', 'audio/mp3', 'audio/x-wav', 'audio/x-flac'];
-    if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(mp3|wav|flac)$/i)) {
+    const allowedTypes = [
+      'audio/mpeg',
+      'audio/wav',
+      'audio/flac',
+      'audio/mp3',
+      'audio/x-wav',
+      'audio/x-flac',
+      'audio/mp4',
+      'audio/x-m4a',
+      'audio/aac',
+      'video/mp4',
+    ];
+    if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(mp3|wav|flac|m4a|mp4)$/i)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only MP3, WAV, and FLAC are allowed.'));
+      cb(new Error('Invalid file type. Only MP3, WAV, FLAC, M4A, and MP4 are allowed.'));
     }
   }
 });

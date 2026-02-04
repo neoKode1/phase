@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, ChevronDown, Settings2, Trash2, Music2, Sliders, Dices, Hash, RefreshCw, Plus, Upload, Play, Pause } from 'lucide-react';
+import { Sparkles, ChevronDown, Settings2, Trash2, Music2, Sliders, Dices, Hash, RefreshCw, Plus, Upload, Play, Pause, Loader2 } from 'lucide-react';
 import { GenerationParams, Song } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { generateApi } from '../services/api';
@@ -174,8 +174,10 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({ onGenerate, isGenerati
   const [isUploadingSource, setIsUploadingSource] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isFormatting, setIsFormatting] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
   const referenceInputRef = useRef<HTMLInputElement>(null);
   const sourceInputRef = useRef<HTMLInputElement>(null);
+  const dragDepthRef = useRef(0);
   const [showAudioModal, setShowAudioModal] = useState(false);
   const [audioModalTarget, setAudioModalTarget] = useState<'reference' | 'source'>('reference');
   const [tempAudioUrl, setTempAudioUrl] = useState('');
@@ -273,6 +275,50 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({ onGenerate, isGenerati
     };
   }, [isResizing]);
 
+  useEffect(() => {
+    const isFileDrag = (e: DragEvent) =>
+      !!(e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files'));
+
+    const handleDragEnter = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      dragDepthRef.current += 1;
+      setIsDraggingFile(true);
+      e.preventDefault();
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+      if (dragDepthRef.current === 0) {
+        setIsDraggingFile(false);
+      }
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      dragDepthRef.current = 0;
+      setIsDraggingFile(false);
+    };
+
+    window.addEventListener('dragenter', handleDragEnter);
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+
+    return () => {
+      window.removeEventListener('dragenter', handleDragEnter);
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, []);
+
   const startResizing = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
@@ -303,13 +349,13 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({ onGenerate, isGenerati
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, target: 'reference' | 'source') => {
     const file = e.target.files?.[0];
     if (file) {
-      void uploadAudio(file, target);
+      void uploadReferenceTrack(file, target);
     }
     e.target.value = '';
   };
 
-  // Format handler - uses LLM to enhance style and auto-fill parameters
-  const handleFormat = async () => {
+  // Format handler - uses LLM to enhance style/lyrics and auto-fill parameters
+  const handleFormat = async (target: 'style' | 'lyrics') => {
     if (!token || !style.trim()) return;
     setIsFormatting(true);
     try {
@@ -327,14 +373,14 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({ onGenerate, isGenerati
 
       if (result.success) {
         // Update fields with LLM-generated values
-        if (result.caption) setStyle(result.caption);
-        if (result.lyrics) setLyrics(result.lyrics);
+        if (target === 'style' && result.caption) setStyle(result.caption);
+        if (target === 'lyrics' && result.lyrics) setLyrics(result.lyrics);
         if (result.bpm && result.bpm > 0) setBpm(result.bpm);
         if (result.duration && result.duration > 0) setDuration(result.duration);
         if (result.key_scale) setKeyScale(result.key_scale);
         if (result.time_signature) setTimeSignature(result.time_signature);
         if (result.language) setVocalLanguage(result.language);
-        setIsFormatCaption(true);
+        if (target === 'style') setIsFormatCaption(true);
       } else {
         console.error('Format failed:', result.error || result.status_message);
         alert(result.error || result.status_message || 'Format failed. Make sure the LLM is initialized.');
@@ -372,7 +418,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({ onGenerate, isGenerati
     }
   }, [token]);
 
-  const uploadReferenceTrack = async (file: File) => {
+  const uploadReferenceTrack = async (file: File, target?: 'reference' | 'source') => {
     if (!token) {
       setUploadError('Please sign in to upload audio.');
       return;
@@ -398,7 +444,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({ onGenerate, isGenerati
       setReferenceTracks(prev => [data.track, ...prev]);
 
       // Also set as current reference/source
-      if (audioModalTarget === 'reference') {
+      const selectedTarget = target ?? audioModalTarget;
+      if (selectedTarget === 'reference') {
         setReferenceAudioUrl(data.track.audio_url);
       } else {
         setSourceAudioUrl(data.track.audio_url);
@@ -494,12 +541,24 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({ onGenerate, isGenerati
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      void uploadAudio(file, target);
+      void uploadReferenceTrack(file, target);
     }
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+  };
+
+  const handleWorkspaceDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    if (e.dataTransfer.files?.length) {
+      handleDrop(e, audioTab);
+    }
+  };
+
+  const handleWorkspaceDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+    }
   };
 
   const handleGenerate = () => {
@@ -582,7 +641,27 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({ onGenerate, isGenerati
   };
 
   return (
-    <div className="flex flex-col h-full bg-zinc-50 dark:bg-suno-panel w-full overflow-y-auto custom-scrollbar transition-colors duration-300">
+    <div
+      className="relative flex flex-col h-full bg-zinc-50 dark:bg-suno-panel w-full overflow-y-auto custom-scrollbar transition-colors duration-300"
+      onDrop={handleWorkspaceDrop}
+      onDragOver={handleWorkspaceDragOver}
+    >
+      {isDraggingFile && (
+        <div className="absolute inset-0 z-[90] pointer-events-none">
+          <div className="absolute inset-0 bg-white/70 dark:bg-black/50 backdrop-blur-sm" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-2 rounded-2xl border border-zinc-200 dark:border-white/10 bg-white/90 dark:bg-zinc-900/90 px-6 py-5 shadow-xl">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 text-white flex items-center justify-center shadow-lg">
+                <Upload size={22} />
+              </div>
+              <div className="text-sm font-semibold text-zinc-900 dark:text-white">Drop to upload</div>
+              <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Uploading as {audioTab === 'reference' ? 'Reference' : 'Cover'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="p-4 pt-14 md:pt-4 space-y-5">
         <input
           ref={referenceInputRef}
@@ -971,12 +1050,12 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({ onGenerate, isGenerati
                     {instrumental ? 'Instrumental' : 'Vocal'}
                   </button>
                   <button
-                    className={`p-1.5 hover:bg-zinc-200 dark:hover:bg-white/10 rounded transition-colors ${isFormatting ? 'text-pink-500 animate-pulse' : 'text-zinc-500 hover:text-black dark:hover:text-white'}`}
+                    className={`p-1.5 hover:bg-zinc-200 dark:hover:bg-white/10 rounded transition-colors ${isFormatting ? 'text-pink-500' : 'text-zinc-500 hover:text-black dark:hover:text-white'}`}
                     title="AI Format - Enhance style & auto-fill parameters"
-                    onClick={handleFormat}
+                    onClick={() => handleFormat('lyrics')}
                     disabled={isFormatting || !style.trim()}
                   >
-                    <Sparkles size={14} />
+                    {isFormatting ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                   </button>
                   <button
                     className="p-1.5 hover:bg-zinc-200 dark:hover:bg-white/10 rounded text-zinc-500 hover:text-black dark:hover:text-white transition-colors"
@@ -1011,12 +1090,12 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({ onGenerate, isGenerati
                   <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">Genre, mood, instruments, vibe</p>
                 </div>
                 <button
-                  className={`p-1.5 hover:bg-zinc-200 dark:hover:bg-white/10 rounded transition-colors ${isFormatting ? 'text-pink-500 animate-pulse' : 'text-zinc-500 hover:text-black dark:hover:text-white'}`}
+                  className={`p-1.5 hover:bg-zinc-200 dark:hover:bg-white/10 rounded transition-colors ${isFormatting ? 'text-pink-500' : 'text-zinc-500 hover:text-black dark:hover:text-white'}`}
                   title="AI Format - Enhance style & auto-fill parameters"
-                  onClick={handleFormat}
+                  onClick={() => handleFormat('style')}
                   disabled={isFormatting || !style.trim()}
                 >
-                  <Sparkles size={14} />
+                  {isFormatting ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                 </button>
               </div>
               <textarea
@@ -1708,7 +1787,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({ onGenerate, isGenerati
                 onClick={() => {
                   const input = document.createElement('input');
                   input.type = 'file';
-                  input.accept = '.mp3,.wav,.flac,audio/*';
+                  input.accept = '.mp3,.wav,.flac,.m4a,.mp4,audio/*';
                   input.onchange = (e) => {
                     const file = (e.target as HTMLInputElement).files?.[0];
                     if (file) void uploadReferenceTrack(file);
@@ -1727,7 +1806,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({ onGenerate, isGenerati
                   <>
                     <Upload size={16} />
                     Upload audio
-                    <span className="text-xs text-zinc-400 ml-1">MP3, WAV, FLAC</span>
+                    <span className="text-xs text-zinc-400 ml-1">MP3, WAV, FLAC, M4A, MP4</span>
                   </>
                 )}
               </button>

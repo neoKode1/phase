@@ -46,6 +46,7 @@ export default function App() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [likedSongIds, setLikedSongIds] = useState<Set<string>>(new Set());
+  const [referenceTracks, setReferenceTracks] = useState<ReferenceTrack[]>([]);
   const [playQueue, setPlayQueue] = useState<Song[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
 
@@ -106,6 +107,17 @@ export default function App() {
     type: 'success',
     isVisible: false,
   });
+
+  interface ReferenceTrack {
+    id: string;
+    filename: string;
+    storage_key: string;
+    duration: number | null;
+    file_size_bytes: number | null;
+    tags: string[] | null;
+    created_at: string;
+    audio_url: string;
+  }
 
   const showToast = (message: string, type: ToastType = 'success') => {
     setToast({ message, type, isVisible: true });
@@ -306,6 +318,31 @@ export default function App() {
 
     loadSongs();
   }, [isAuthenticated, token]);
+
+  const loadReferenceTracks = useCallback(async () => {
+    if (!isAuthenticated || !token) return;
+    try {
+      const response = await fetch('/api/reference-tracks', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      setReferenceTracks(data.tracks || []);
+    } catch (error) {
+      console.error('Failed to load reference tracks:', error);
+    }
+  }, [isAuthenticated, token]);
+
+  // Load reference tracks for Library
+  useEffect(() => {
+    loadReferenceTracks();
+  }, [loadReferenceTracks]);
+
+  useEffect(() => {
+    if (currentView === 'library') {
+      loadReferenceTracks();
+    }
+  }, [currentView, loadReferenceTracks]);
 
   // Player Logic
   const getActiveQueue = (song?: Song) => {
@@ -816,6 +853,26 @@ export default function App() {
     }
   };
 
+  const handleDeleteReferenceTrack = async (trackId: string) => {
+    if (!token) return;
+    const confirmed = window.confirm('Delete this upload? This action cannot be undone.');
+    if (!confirmed) return;
+    try {
+      const response = await fetch(`/api/reference-tracks/${trackId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to delete upload');
+      }
+      setReferenceTracks(prev => prev.filter(track => track.id !== trackId));
+      showToast('Upload deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete upload:', error);
+      showToast('Failed to delete upload', 'error');
+    }
+  };
+
   const createPlaylist = async (name: string, description: string) => {
     if (!token) return;
     try {
@@ -882,19 +939,28 @@ export default function App() {
   // Render Layout Logic
   const renderContent = () => {
     switch (currentView) {
-      case 'library':
+      case 'library': {
+        const allSongs = user ? songs.filter(s => s.userId === user.id) : [];
         return (
           <LibraryView
+            allSongs={allSongs}
             likedSongs={songs.filter(s => likedSongIds.has(s.id))}
             playlists={playlists}
+            referenceTracks={referenceTracks}
             onPlaySong={playSong}
             onCreatePlaylist={() => {
               setSongToAddToPlaylist(null);
               setIsCreatePlaylistModalOpen(true);
             }}
             onSelectPlaylist={(p) => handleNavigateToPlaylist(p.id)}
+            onAddToPlaylist={openAddToPlaylistModal}
+            onOpenVideo={openVideoGenerator}
+            onReusePrompt={handleReuse}
+            onDeleteSong={handleDeleteSong}
+            onDeleteReferenceTrack={handleDeleteReferenceTrack}
           />
         );
+      }
 
       case 'profile':
         if (!viewingUsername) return null;
