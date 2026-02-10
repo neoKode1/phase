@@ -408,19 +408,34 @@ function AppContent() {
       return;
     }
 
-    let nextIndex;
-    if (isShuffle) {
-      do {
-        nextIndex = Math.floor(Math.random() * queue.length);
-      } while (queue.length > 1 && nextIndex === currentIndex);
-    } else {
-      nextIndex = (currentIndex + 1) % queue.length;
+    // Find next playable song (has audioUrl and not generating)
+    const queueLen = queue.length;
+    for (let i = 1; i <= queueLen; i++) {
+      let nextIndex;
+      if (isShuffle) {
+        nextIndex = Math.floor(Math.random() * queueLen);
+        if (queueLen > 1 && nextIndex === currentIndex) continue;
+      } else {
+        nextIndex = currentIndex + i;
+        // In 'none' repeat mode, stop at end of queue
+        if (repeatMode === 'none' && nextIndex >= queueLen) {
+          setIsPlaying(false);
+          return;
+        }
+        nextIndex = nextIndex % queueLen;
+      }
+
+      const candidate = queue[nextIndex];
+      if (candidate.audioUrl && !candidate.isGenerating) {
+        setQueueIndex(nextIndex);
+        setCurrentSong(candidate);
+        setIsPlaying(true);
+        return;
+      }
     }
 
-    const nextSong = queue[nextIndex];
-    setQueueIndex(nextIndex);
-    setCurrentSong(nextSong);
-    setIsPlaying(true);
+    // No playable songs found
+    setIsPlaying(false);
   }, [currentSong, queueIndex, isShuffle, repeatMode, playQueue, songs]);
 
   const playPrevious = useCallback(() => {
@@ -438,16 +453,35 @@ function AppContent() {
       return;
     }
 
-    let prevIndex = (currentIndex - 1 + queue.length) % queue.length;
-    if (isShuffle) {
-      prevIndex = Math.floor(Math.random() * queue.length);
+    // Find previous playable song (has audioUrl and not generating)
+    const queueLen = queue.length;
+    for (let i = 1; i <= queueLen; i++) {
+      let prevIndex;
+      if (isShuffle) {
+        prevIndex = Math.floor(Math.random() * queueLen);
+        if (queueLen > 1 && prevIndex === currentIndex) continue;
+      } else {
+        prevIndex = currentIndex - i;
+        // In 'none' repeat mode, stop at beginning of queue
+        if (repeatMode === 'none' && prevIndex < 0) {
+          if (audioRef.current) audioRef.current.currentTime = 0;
+          return;
+        }
+        prevIndex = (prevIndex + queueLen) % queueLen;
+      }
+
+      const candidate = queue[prevIndex];
+      if (candidate.audioUrl && !candidate.isGenerating) {
+        setQueueIndex(prevIndex);
+        setCurrentSong(candidate);
+        setIsPlaying(true);
+        return;
+      }
     }
 
-    const prevSong = queue[prevIndex];
-    setQueueIndex(prevIndex);
-    setCurrentSong(prevSong);
-    setIsPlaying(true);
-  }, [currentSong, queueIndex, currentTime, isShuffle, playQueue, songs]);
+    // No playable songs found
+    setIsPlaying(false);
+  }, [currentSong, queueIndex, currentTime, isShuffle, repeatMode, playQueue, songs]);
 
   useEffect(() => {
     playNextRef.current = playNext;
@@ -564,6 +598,29 @@ function AppContent() {
       audioRef.current.playbackRate = playbackRate;
     }
   }, [playbackRate]);
+
+  // Spacebar play/pause
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable) return;
+      e.preventDefault();
+      if (currentSong) {
+        if (currentSong.audioUrl) {
+          setIsPlaying(prev => !prev);
+        }
+      } else {
+        // No song selected — play first available
+        const available = songs.filter(s => s.audioUrl && !s.isGenerating);
+        if (available.length > 0) {
+          playSong(available[0], available);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentSong, songs]);
 
   // Helper to cleanup a job and check if all jobs are done
   const cleanupJob = useCallback((jobId: string, tempId: string) => {
@@ -862,7 +919,18 @@ function AppContent() {
 
   const togglePlay = () => {
     if (!currentSong) return;
+    if (!currentSong.audioUrl) {
+      showToast(t('songNotAvailable'), 'error');
+      return;
+    }
     setIsPlaying(!isPlaying);
+  };
+
+  const playFirst = () => {
+    const available = songs.filter(s => s.audioUrl && !s.isGenerating);
+    if (available.length > 0) {
+      playSong(available[0], available);
+    }
   };
 
   const playSong = (song: Song, list?: Song[]) => {
@@ -1293,6 +1361,9 @@ function AppContent() {
                   isLiked={selectedSong ? likedSongIds.has(selectedSong.id) : false}
                   onToggleLike={toggleLike}
                   onDelete={handleDeleteSong}
+                  onPlay={playSong}
+                  isPlaying={isPlaying}
+                  currentSong={currentSong}
                 />
               </div>
             )}
@@ -1371,6 +1442,7 @@ function AppContent() {
         onReusePrompt={() => currentSong && handleReuse(currentSong)}
         onAddToPlaylist={() => currentSong && openAddToPlaylistModal(currentSong)}
         onDelete={() => currentSong && handleDeleteSong(currentSong)}
+        onPlayFirst={playFirst}
       />
 
       <CreatePlaylistModal
@@ -1430,6 +1502,9 @@ function AppContent() {
               isLiked={selectedSong ? likedSongIds.has(selectedSong.id) : false}
               onToggleLike={toggleLike}
               onDelete={handleDeleteSong}
+              onPlay={playSong}
+              isPlaying={isPlaying}
+              currentSong={currentSong}
             />
           </div>
         </div>

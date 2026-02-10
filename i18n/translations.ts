@@ -474,10 +474,11 @@ export const translations = {
     
     // Player
     nowPlaying: 'Now Playing',
+    selectSongToPlay: 'Select a song to play',
     downloadAudio: 'Download Audio',
     openInEditor: 'Open in Editor',
     anonymous: 'Anonymous',
-    
+
     // PlaylistDetail
     loadingPlaylist: 'Loading playlist...',
     playlistNotFound: 'Playlist not found',
@@ -1069,10 +1070,11 @@ export const translations = {
     
     // Player
     nowPlaying: '正在播放',
+    selectSongToPlay: '选择一首歌曲播放',
     downloadAudio: '下载音频',
     openInEditor: '在编辑器中打开',
     anonymous: '匿名用户',
-    
+
     // PlaylistDetail
     loadingPlaylist: '加载播放列表中...',
     playlistNotFound: '播放列表未找到',
@@ -1664,10 +1666,11 @@ export const translations = {
     
     // Player
     nowPlaying: '再生中',
+    selectSongToPlay: '曲を選択して再生',
     downloadAudio: 'オーディオをダウンロード',
     openInEditor: 'エディターで開く',
     anonymous: '匿名ユーザー',
-    
+
     // PlaylistDetail
     loadingPlaylist: 'プレイリストを読み込み中...',
     playlistNotFound: 'プレイリストが見つかりません',
@@ -2259,10 +2262,11 @@ export const translations = {
     
     // Player
     nowPlaying: '재생 중',
+    selectSongToPlay: '재생할 곡을 선택하세요',
     downloadAudio: '오디오 다운로드',
     openInEditor: '편집기에서 열기',
     anonymous: '익명 사용자',
-    
+
     // PlaylistDetail
     loadingPlaylist: '재생목록 로딩 중...',
     playlistNotFound: '재생목록을 찾을 수 없습니다',
