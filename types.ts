@@ -78,6 +78,7 @@ export interface GenerationParams {
   randomSeed: boolean;
   seed: number;
   thinking: boolean;
+  enhance?: boolean;
   audioFormat: 'mp3' | 'flac';
   inferMethod: 'ode' | 'sde';
   shift: number;

@@ -135,10 +135,14 @@ async function buildGradioArgs(params: GenerationParams): Promise<unknown[]> {
   const prompt = params.customMode ? caption : (params.songDescription || caption);
   const lyrics = params.instrumental ? '' : (params.lyrics || '');
   const isThinking = params.thinking ?? false;
+  const isEnhance = params.enhance ?? false;
 
   // Prepare audio files (async — reads from disk)
   const referenceAudio = await prepareAudioFile(params.referenceAudioUrl);
   const sourceAudio = await prepareAudioFile(params.sourceAudioUrl);
+
+  // CoT features are gated by enhance OR thinking (either enables LLM enrichment)
+  const useCot = isEnhance || isThinking;
 
   return [
     prompt,                                                       //  0: Music Caption
@@ -174,9 +178,9 @@ async function buildGradioArgs(params: GenerationParams): Promise<unknown[]> {
     params.lmTopK ?? 0,                                           // 30: LM Top-K
     params.lmTopP ?? 0.9,                                         // 31: LM Top-P
     params.lmNegativePrompt || 'NO USER INPUT',                   // 32: LM Negative Prompt
-    isThinking ? (params.useCotMetas ?? true) : false,            // 33: CoT Metas
-    isThinking ? (params.useCotCaption ?? true) : false,          // 34: CaptionRewrite
-    isThinking ? (params.useCotLanguage ?? true) : false,         // 35: CoT Language
+    useCot ? (params.useCotMetas ?? true) : false,                // 33: CoT Metas
+    useCot ? (params.useCotCaption ?? true) : false,              // 34: CaptionRewrite
+    useCot ? (params.useCotLanguage ?? true) : false,             // 35: CoT Language
     params.isFormatCaption ?? false,                              // 36: Is Format Caption State
     params.constrainedDecodingDebug ?? false,                     // 37: Constrained Decoding Debug
     params.allowLmBatch ?? true,                                  // 38: ParallelThinking
@@ -264,6 +268,7 @@ export interface GenerationParams {
   randomSeed?: boolean;
   seed?: number;
   thinking?: boolean;
+  enhance?: boolean;
   audioFormat?: 'mp3' | 'flac';
   inferMethod?: 'ode' | 'sde';
   shift?: number;
@@ -654,8 +659,7 @@ async function processGenerationViaPython(
     if (params.lmTopK !== undefined && params.lmTopK > 0) args.push('--lm-top-k', String(params.lmTopK));
     if (params.lmTopP !== undefined) args.push('--lm-top-p', String(params.lmTopP));
     if (params.lmNegativePrompt) args.push('--lm-negative-prompt', params.lmNegativePrompt);
-    if (params.lmBackend) args.push('--lm-backend', params.lmBackend);
-    if (params.lmModel) args.push('--lm-model', params.lmModel);
+    // Note: --lm-backend and --lm-model are not supported by simple_generate.py
     if (params.useCotMetas === false) args.push('--no-cot-metas');
     if (params.useCotCaption === false) args.push('--no-cot-caption');
     if (params.useCotLanguage === false) args.push('--no-cot-language');

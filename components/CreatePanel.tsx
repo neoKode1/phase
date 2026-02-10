@@ -168,6 +168,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [randomSeed, setRandomSeed] = useState(true);
   const [seed, setSeed] = useState(-1);
   const [thinking, setThinking] = useState(false); // Default false for GPU compatibility
+  const [enhance, setEnhance] = useState(false); // AI Enhance: uses LLM to enrich caption & generate metadata
   const [audioFormat, setAudioFormat] = useState<'mp3' | 'flac'>('mp3');
   const [inferenceSteps, setInferenceSteps] = useState(12);
   const [inferMethod, setInferMethod] = useState<'ode' | 'sde'>('ode');
@@ -1003,6 +1004,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
         randomSeed: randomSeed || i > 0, // Force random for subsequent bulk jobs
         seed: jobSeed,
         thinking,
+        enhance,
         audioFormat,
         inferMethod,
         lmBackend,
@@ -1601,7 +1603,17 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             <div className="bg-white dark:bg-suno-card rounded-xl border border-zinc-200 dark:border-white/5 overflow-hidden transition-colors group focus-within:border-zinc-400 dark:focus-within:border-white/20">
               <div className="flex items-center justify-between px-3 py-2.5 bg-zinc-50 dark:bg-white/5 border-b border-zinc-100 dark:border-white/5">
                 <div>
-                  <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">{t('styleOfMusic')}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">{t('styleOfMusic')}</span>
+                    <button
+                      onClick={() => setEnhance(!enhance)}
+                      className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${enhance ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400' : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300'}`}
+                      title={t('enhanceTooltip')}
+                    >
+                      <Sparkles size={9} />
+                      <span>{enhance ? 'ON' : 'OFF'}</span>
+                    </button>
+                  </div>
                   <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{t('genreMoodInstruments')}</p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -1618,15 +1630,15 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                   >
                     <Trash2 size={14} />
                   </button>
+                  <button
+                    className={`p-1.5 hover:bg-zinc-200 dark:hover:bg-white/10 rounded transition-colors ${isFormattingStyle ? 'text-pink-500' : 'text-zinc-500 hover:text-black dark:hover:text-white'}`}
+                    title="AI Format - Enhance style & auto-fill parameters"
+                    onClick={() => handleFormat('style')}
+                    disabled={isFormattingStyle || !style.trim()}
+                  >
+                    {isFormattingStyle ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  </button>
                 </div>
-                <button
-                  className={`p-1.5 hover:bg-zinc-200 dark:hover:bg-white/10 rounded transition-colors ${isFormattingStyle ? 'text-pink-500' : 'text-zinc-500 hover:text-black dark:hover:text-white'}`}
-                  title="AI Format - Enhance style & auto-fill parameters"
-                  onClick={() => handleFormat('style')}
-                  disabled={isFormattingStyle || !style.trim()}
-                >
-                  {isFormattingStyle ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                </button>
               </div>
               <textarea
                 value={style}
